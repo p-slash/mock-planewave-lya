@@ -14,7 +14,7 @@ This repository currently contains:
 - Reads LATIS-style multi-extension sightline FITS files with one binary table HDU per quasar sightline
 - Preserves the same output FITS structure on write
 - Converts observed wavelength to absorber redshift using a fiducial cosmology
-- Rotates sightlines to a field center and uses a plane-parallel local Cartesian coordinate system
+- Rotates sightlines to a field center and maps them into a full spherical 3D Cartesian coordinate system using comoving distance
 - Uses relative comoving coordinates for all three axes, including the line-of-sight axis
 - Generates real-valued plane-wave fluctuations with random 3D `k` vectors and scalar phases
 - Adds one user-controlled global Gaussian noise level to every valid pixel

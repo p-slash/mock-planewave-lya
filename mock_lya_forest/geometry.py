@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import replace
 
 import numpy as np
-from astropy.coordinates import SkyCoord, SkyOffsetFrame
+from astropy.coordinates import SkyCoord
 import astropy.units as u
 from astropy.cosmology import FlatLambdaCDM
 
@@ -29,29 +29,36 @@ def infer_field_center(sightlines: list[SightlineSpectrum]) -> tuple[float, floa
     return float(np.mean(ra_deg)), float(np.mean(dec_deg))
 
 
-def rotate_to_field_center(
+def spherical_angles_from_field_center(
     ra_deg: float,
     dec_deg: float,
     ra_center_deg: float,
     dec_center_deg: float,
 ) -> tuple[float, float]:
-    """Rotate one sky position into a local offset frame centered on the field."""
+    """Return the polar angle and azimuth relative to the chosen field center."""
 
     origin = SkyCoord(ra=ra_center_deg * u.deg, dec=dec_center_deg * u.deg, frame="icrs")
     sightline = SkyCoord(ra=ra_deg * u.deg, dec=dec_deg * u.deg, frame="icrs")
-    offset_frame = SkyOffsetFrame(origin=origin)
-    rotated = sightline.transform_to(offset_frame)
-    return float(rotated.lon.to_value(u.rad)), float(rotated.lat.to_value(u.rad))
+    theta_rad = origin.separation(sightline).to_value(u.rad)
+    phi_rad = origin.position_angle(sightline).to_value(u.rad)
+    return float(theta_rad), float(phi_rad)
 
 
-def project_to_plane_parallel(
-    lon_rot_rad: float,
-    lat_rot_rad: float,
+def spherical_to_cartesian(
+    chi_cmpc_h: np.ndarray,
+    theta_rad: float,
+    phi_rad: float,
     chi_ref_cmpc_h: float,
-) -> tuple[float, float]:
-    """Project angular offsets into transverse plane-parallel coordinates."""
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Convert spherical coordinates around the field center into local Cartesian coordinates."""
 
-    return chi_ref_cmpc_h * lon_rot_rad, chi_ref_cmpc_h * lat_rot_rad
+    chi_cmpc_h = np.asarray(chi_cmpc_h, dtype=np.float64)
+    sin_theta = np.sin(theta_rad)
+    cos_theta = np.cos(theta_rad)
+    x_coord = chi_cmpc_h * sin_theta * np.cos(phi_rad)
+    y_coord = chi_cmpc_h * sin_theta * np.sin(phi_rad)
+    z_coord = chi_cmpc_h * cos_theta - chi_ref_cmpc_h
+    return x_coord, y_coord, z_coord
 
 
 def assign_cartesian_coordinates(
@@ -79,21 +86,21 @@ def assign_cartesian_coordinates(
 
     for sightline in catalog.sightlines:
         pixel_redshift = wavelength_to_absorber_redshift(sightline.wavelength, lambda_lya_rest=lambda_lya_rest)
-        z_coord = relative_comoving_distance(pixel_redshift, z_ref=z_ref, cosmology=cosmology)
-        lon_rot_rad, lat_rot_rad = rotate_to_field_center(
+        chi_coord = relative_comoving_distance(pixel_redshift, z_ref=0.0, cosmology=cosmology)
+        theta_rad, phi_rad = spherical_angles_from_field_center(
             sightline.ra_deg,
             sightline.dec_deg,
             field_center_ra_deg,
             field_center_dec_deg,
         )
-        x_coord, y_coord = project_to_plane_parallel(lon_rot_rad, lat_rot_rad, chi_ref_cmpc_h)
+        x_coord, y_coord, z_coord = spherical_to_cartesian(chi_coord, theta_rad, phi_rad, chi_ref_cmpc_h)
 
         updated_sightlines.append(
             replace(
                 sightline,
                 pixel_redshift=np.asarray(pixel_redshift, dtype=np.float64),
-                x=np.full_like(z_coord, x_coord, dtype=np.float64),
-                y=np.full_like(z_coord, y_coord, dtype=np.float64),
+                x=np.asarray(x_coord, dtype=np.float64),
+                y=np.asarray(y_coord, dtype=np.float64),
                 z=np.asarray(z_coord, dtype=np.float64),
             )
         )

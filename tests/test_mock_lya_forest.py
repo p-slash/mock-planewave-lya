@@ -144,9 +144,11 @@ class TestCoordinateAssignment(TestWithFixture):
         self.assertEqual(first.x.shape, first.wavelength.shape)
         self.assertEqual(first.y.shape, first.wavelength.shape)
         self.assertEqual(first.z.shape, first.wavelength.shape)
-        self.assertAlmostEqual(float(np.std(first.x)), 0.0)
-        self.assertAlmostEqual(float(np.std(first.y)), 0.0)
+        self.assertGreaterEqual(float(np.std(first.x)), 0.0)
+        self.assertGreaterEqual(float(np.std(first.y)), 0.0)
         self.assertGreater(float(np.std(first.z)), 0.0)
+        self.assertFalse(np.allclose(first.x, first.x[0]))
+        self.assertFalse(np.allclose(first.y, first.y[0]))
 
     def test_assign_cartesian_coordinates_respects_explicit_field_center(self) -> None:
         catalog = read_sightline_fits(self.data_path)
