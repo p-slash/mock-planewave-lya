@@ -205,7 +205,7 @@ class TestMockGeneration(TestWithFixture):
         actual = evaluate_plane_wave_sum(x, y, z, wave_set)
         positions = np.column_stack((x, y, z))
         phase_matrix = positions @ k_vectors.T + phases
-        expected = np.cos(phase_matrix).sum(axis=1)
+        expected = np.cos(phase_matrix).sum(axis=1) / np.sqrt(k_vectors.shape[0])
         np.testing.assert_allclose(actual, expected)
 
     def test_mock_generation_is_deterministic_for_fixed_seed(self) -> None:

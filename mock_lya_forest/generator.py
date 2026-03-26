@@ -39,7 +39,7 @@ def evaluate_plane_wave_sum(
     for k_vector, phase in zip(wave_set.k_vectors, wave_set.phases, strict=True):
         phase_argument = k_vector[0] * x + k_vector[1] * y + k_vector[2] * z + phase
         delta_mock += np.cos(phase_argument)
-    return delta_mock
+    return delta_mock / np.sqrt(wave_set.k_vectors.shape[0])
 
 
 def generate_mock_for_sightline(sightline: SightlineSpectrum, wave_set: PlaneWaveSet) -> np.ndarray:
