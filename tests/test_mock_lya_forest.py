@@ -8,6 +8,7 @@ import numpy as np
 from astropy.io import fits
 
 from mock_lya_forest import (
+    PlaneWaveSet,
     assign_cartesian_coordinates,
     build_cosmology,
     build_plane_wave_set,
@@ -16,6 +17,7 @@ from mock_lya_forest import (
     write_sightline_fits,
 )
 from mock_lya_forest.cli import main as cli_main
+from mock_lya_forest.generator import evaluate_plane_wave_sum
 
 
 def _write_sample_input_fits(path: Path) -> None:
@@ -161,6 +163,49 @@ class TestCoordinateAssignment(TestWithFixture):
 
 
 class TestMockGeneration(TestWithFixture):
+    def test_single_wave_matches_analytic_cosine(self) -> None:
+        z = np.linspace(-2.0, 2.0, 9)
+        x = np.zeros_like(z)
+        y = np.zeros_like(z)
+        kz = 1.7
+        phase = 0.3
+        wave_set = PlaneWaveSet(
+            k_vectors=np.array([[0.0, 0.0, kz]], dtype=np.float64),
+            phases=np.array([phase], dtype=np.float64),
+            k_min=kz,
+            k_max=kz,
+        )
+
+        actual = evaluate_plane_wave_sum(x, y, z, wave_set)
+        expected = np.cos(kz * z + phase)
+        np.testing.assert_allclose(actual, expected)
+
+    def test_multi_wave_matches_independent_vectorized_oracle(self) -> None:
+        x = np.array([0.0, 0.5, -0.25, 1.0], dtype=np.float64)
+        y = np.array([0.1, -0.2, 0.3, 0.4], dtype=np.float64)
+        z = np.array([-1.0, -0.5, 0.0, 0.5], dtype=np.float64)
+        k_vectors = np.array(
+            [
+                [0.2, -0.1, 0.3],
+                [-0.4, 0.5, 0.1],
+                [0.0, 0.25, -0.35],
+            ],
+            dtype=np.float64,
+        )
+        phases = np.array([0.1, 1.2, -0.7], dtype=np.float64)
+        wave_set = PlaneWaveSet(
+            k_vectors=k_vectors,
+            phases=phases,
+            k_min=0.1,
+            k_max=0.7,
+        )
+
+        actual = evaluate_plane_wave_sum(x, y, z, wave_set)
+        positions = np.column_stack((x, y, z))
+        phase_matrix = positions @ k_vectors.T + phases
+        expected = np.cos(phase_matrix).sum(axis=1)
+        np.testing.assert_allclose(actual, expected)
+
     def test_mock_generation_is_deterministic_for_fixed_seed(self) -> None:
         catalog = read_sightline_fits(self.data_path)
         coords = assign_cartesian_coordinates(catalog, build_cosmology(), z_ref=2.5)
@@ -194,6 +239,27 @@ class TestMockGeneration(TestWithFixture):
         valid = np.isfinite(first.delta)
         self.assertTrue(np.any(valid))
         self.assertTrue(np.all(np.isinf(first.ivar[valid])))
+
+    def test_noise_is_added_after_noiseless_plane_wave_field(self) -> None:
+        catalog = read_sightline_fits(self.data_path)
+        coords = assign_cartesian_coordinates(catalog, build_cosmology(), z_ref=2.5)
+        wave_set = PlaneWaveSet(
+            k_vectors=np.array([[0.0, 0.0, 0.2], [0.1, -0.05, 0.0]], dtype=np.float64),
+            phases=np.array([0.4, -0.2], dtype=np.float64),
+            k_min=0.1,
+            k_max=0.2,
+        )
+        noiseless = generate_mock_catalog(coords, wave_set, noise_sigma=0.0, seed=13)
+        noisy = generate_mock_catalog(coords, wave_set, noise_sigma=0.3, seed=13)
+
+        first_noiseless = noiseless.sightlines[0]
+        first_noisy = noisy.sightlines[0]
+        valid = np.isfinite(first_noisy.delta)
+        actual_residual = first_noisy.delta[valid] - first_noiseless.delta[valid]
+
+        rng = np.random.default_rng(13)
+        expected_noise = rng.normal(loc=0.0, scale=0.3, size=first_noisy.delta.shape)[valid]
+        np.testing.assert_allclose(actual_residual, expected_noise.astype(np.float32), rtol=1e-6, atol=1e-6)
 
 
 class TestCli(TestWithFixture):
