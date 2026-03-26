@@ -1,0 +1,15 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+
+.venv/
+.pytest_cache/
+.mypy_cache/
+
+.vscode/
+
+build/
+dist/
+*.egg-info/
+
+mock-output.fits
