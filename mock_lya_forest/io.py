@@ -85,8 +85,8 @@ def _build_sightline(hdu: fits.BinTableHDU) -> SightlineSpectrum:
         name=hdu.name,
         los_id=str(header.get("LOS_ID", hdu.name)),
         target_id=str(header.get("TARGETID", hdu.name)),
-        ra_deg=float(header["RA"]),
-        dec_deg=float(header["DEC"]),
+        ra_deg=np.degrees(float(header["RA"])),
+        dec_deg=np.degrees(float(header["DEC"])),
         quasar_redshift=float(header["Z"]),
         wavelength=wavelength,
         delta=delta,
@@ -125,8 +125,8 @@ def _build_table_hdu(sightline: SightlineSpectrum) -> fits.BinTableHDU:
     hdu.header["EXTNAME"] = sightline.name
     hdu.header["LOS_ID"] = sightline.los_id
     hdu.header["TARGETID"] = sightline.target_id
-    hdu.header["RA"] = float(sightline.ra_deg)
-    hdu.header["DEC"] = float(sightline.dec_deg)
+    hdu.header["RA"] = float(np.radians(sightline.ra_deg))
+    hdu.header["DEC"] = float(np.radians(sightline.dec_deg))
     hdu.header["Z"] = float(sightline.quasar_redshift)
     if sightline.mean_resolution is not None:
         hdu.header["MEANRESO"] = float(sightline.mean_resolution)
