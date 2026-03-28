@@ -50,6 +50,34 @@ def generate_mock_for_sightline(sightline: SightlineSpectrum, wave_set: PlaneWav
     return evaluate_plane_wave_sum(sightline.x, sightline.y, sightline.z, wave_set)
 
 
+def generate_white_noise_catalog(
+    catalog: SightlineCatalog,
+    noise_sigma: float,
+    seed: int | None = None,
+) -> SightlineCatalog:
+    """Generate a catalog of uncorrelated Gaussian white noise (mean=0) for every valid pixel."""
+
+    rng = np.random.default_rng(seed)
+    updated_sightlines: list[SightlineSpectrum] = []
+
+    for sightline in catalog.sightlines:
+        valid_mask = _valid_pixel_mask(sightline)
+        output_delta = np.full(sightline.delta.shape, np.nan, dtype=np.float32)
+        n_valid = int(valid_mask.sum())
+        if n_valid > 0:
+            output_delta[valid_mask] = rng.normal(loc=0.0, scale=noise_sigma, size=n_valid).astype(np.float32)
+        output_ivar = build_global_ivar(valid_mask, noise_sigma)
+        updated_sightlines.append(replace(sightline, delta=output_delta, ivar=output_ivar))
+
+    return SightlineCatalog(
+        sightlines=updated_sightlines,
+        primary_header=catalog.primary_header.copy(),
+        reference_redshift=catalog.reference_redshift,
+        field_center_ra_deg=catalog.field_center_ra_deg,
+        field_center_dec_deg=catalog.field_center_dec_deg,
+    )
+
+
 def generate_mock_catalog(
     catalog: SightlineCatalog,
     wave_set: PlaneWaveSet,
